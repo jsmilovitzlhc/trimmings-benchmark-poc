@@ -1,22 +1,31 @@
 const express = require('express');
 const cors = require('cors');
-const db = require('../server/db');
-const apiRoutes = require('../server/routes/api');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-let initialized = false;
+let initDone = false;
+let initPromise = null;
 
-app.use(async (req, res, next) => {
-  if (!initialized) {
-    await db.initialize();
-    initialized = true;
+async function ensureInit() {
+  if (initDone) return;
+  if (!initPromise) {
+    initPromise = require('../server/db').initialize();
   }
-  next();
+  await initPromise;
+  initDone = true;
+}
+
+app.all('*', async (req, res, next) => {
+  try {
+    await ensureInit();
+    next();
+  } catch (e) {
+    res.status(500).json({ error: 'DB init failed: ' + e.message });
+  }
 });
 
-app.use('/', apiRoutes);
+app.use('/api', require('../server/routes/api'));
 
 module.exports = app;

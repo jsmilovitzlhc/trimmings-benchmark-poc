@@ -3,3 +3,4 @@ data/trimmings.db
 .env*
 client/dist/
 .vercel/
+.vercel
