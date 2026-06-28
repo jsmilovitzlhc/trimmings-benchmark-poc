@@ -9,7 +9,7 @@
     "api/index.js": {
       "memory": 256,
       "maxDuration": 30,
-      "includeFiles": "data/snapshot.json,server/**,node_modules/sql.js/dist/sql-wasm.wasm"
+      "includeFiles": "data/snapshot.json,server/**,api/sql-wasm.wasm"
     }
   }
 }

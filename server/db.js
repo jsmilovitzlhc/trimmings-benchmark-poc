@@ -26,11 +26,19 @@ function save() {
 async function initialize() {
   if (_ready) return _ready;
   _ready = (async () => {
-    const sqlJsEntry = require.resolve('sql.js');
-    const sqlJsDir = path.resolve(path.dirname(sqlJsEntry), '..');
-    const SQL = await initSqlJs({
-      locateFile: (file) => path.join(sqlJsDir, 'dist', file)
-    });
+    // Try multiple paths for the WASM file (local dev vs Vercel)
+    const wasmCandidates = [
+      path.join(__dirname, '..', 'api', 'sql-wasm.wasm'),
+      path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm'),
+    ];
+    let wasmBinary;
+    for (const p of wasmCandidates) {
+      try {
+        wasmBinary = fs.readFileSync(p);
+        break;
+      } catch {}
+    }
+    const SQL = await initSqlJs({ wasmBinary });
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
     if (fs.existsSync(DB_PATH)) {
