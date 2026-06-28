@@ -1,5 +1,5 @@
 node_modules/
-data/
+data/trimmings.db
 .env*
 client/dist/
 .vercel/

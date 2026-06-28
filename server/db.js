@@ -14,8 +14,12 @@ function getDb() {
 
 function save() {
   if (_db) {
-    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
-    fs.writeFileSync(DB_PATH, Buffer.from(_db.export()));
+    try {
+      fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
+      fs.writeFileSync(DB_PATH, Buffer.from(_db.export()));
+    } catch (e) {
+      // Read-only filesystem (Vercel) — data stays in memory only
+    }
   }
 }
 
@@ -113,15 +117,39 @@ async function initialize() {
     // Seed series if empty
     const [{ c }] = queryAll('SELECT count(*) as c FROM series');
     if (c === 0) {
-      _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('domestic_90cl', 'MP Domestic 90CL', '$/cwt', 'raw', 'Domestic boneless beef trimmings, 90% chemical lean')");
-      _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('domestic_50cl', 'MP Domestic 50CL', '$/cwt', 'raw', 'Domestic boneless beef trimmings, 50% lean')");
-      _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('imported_90cl', 'MP Imported 90CL', '$/lb', 'raw', 'Imported boneless beef trimmings, 90% chemical lean')");
-      _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('75cl_meatblock', 'MP 75CL Meat-Block', '$/cwt', 'derived', 'Derived 75CL blend from 90CL/50CL at configured ratio')");
-      _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('trim_spread', 'MP Trim Spread', '$/cwt', 'derived', 'Domestic 90CL minus Imported 90CL, unit-normalized')");
+      // Try loading from snapshot first
+      const snapshotPath = path.join(__dirname, '..', 'data', 'snapshot.json');
+      if (fs.existsSync(snapshotPath)) {
+        console.log('Loading from snapshot...');
+        const snapshot = JSON.parse(fs.readFileSync(snapshotPath, 'utf8'));
+        for (const s of snapshot.series) {
+          _db.run("INSERT OR REPLACE INTO series (id, name, unit, source_type, description, is_active) VALUES (?, ?, ?, ?, ?, ?)",
+            [s.id, s.name, s.unit, s.source_type, s.description, s.is_active]);
+        }
+        for (const a of snapshot.assessments) {
+          _db.run("INSERT OR REPLACE INTO assessments (series_id, date, value, low, high, volume, data_source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [a.series_id, a.date, a.value, a.low, a.high, a.volume, a.data_source]);
+        }
+        for (const c of snapshot.contributors) {
+          _db.run("INSERT OR REPLACE INTO contributors (id, name, company, is_active, is_synthetic) VALUES (?, ?, ?, ?, ?)",
+            [c.id, c.name, c.company, c.is_active, c.is_synthetic]);
+        }
+        for (const t of snapshot.trades) {
+          _db.run("INSERT INTO trades (contributor_id, series_id, date, price, volume, unit, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [t.contributor_id, t.series_id, t.date, t.price, t.volume, t.unit, t.status, t.notes]);
+        }
+        console.log(`Loaded snapshot: ${snapshot.assessments.length} assessments, ${snapshot.trades.length} trades`);
+      } else {
+        _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('domestic_90cl', 'MP Domestic 90CL', '$/cwt', 'raw', 'Domestic boneless beef trimmings, 90% chemical lean')");
+        _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('domestic_50cl', 'MP Domestic 50CL', '$/cwt', 'raw', 'Domestic boneless beef trimmings, 50% lean')");
+        _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('imported_90cl', 'MP Imported 90CL', '$/lb', 'raw', 'Imported boneless beef trimmings, 90% chemical lean')");
+        _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('75cl_meatblock', 'MP 75CL Meat-Block', '$/cwt', 'derived', 'Derived 75CL blend from 90CL/50CL at configured ratio')");
+        _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('trim_spread', 'MP Trim Spread', '$/cwt', 'derived', 'Domestic 90CL minus Imported 90CL, unit-normalized')");
+      }
     }
 
-    save();
-    console.log(`Database initialized at ${DB_PATH}`);
+    try { save(); } catch (e) { console.log('Read-only filesystem, running in-memory only'); }
+    console.log(`Database initialized (${c > 0 ? 'from disk' : 'fresh'})`);
   })();
   return _ready;
 }
