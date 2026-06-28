@@ -26,7 +26,8 @@ function save() {
 async function initialize() {
   if (_ready) return _ready;
   _ready = (async () => {
-    const sqlJsDir = path.dirname(require.resolve('sql.js/package.json'));
+    const sqlJsEntry = require.resolve('sql.js');
+    const sqlJsDir = path.resolve(path.dirname(sqlJsEntry), '..');
     const SQL = await initSqlJs({
       locateFile: (file) => path.join(sqlJsDir, 'dist', file)
     });
