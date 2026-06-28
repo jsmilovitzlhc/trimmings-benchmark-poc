@@ -157,7 +157,25 @@ async function initialize() {
         _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('imported_90cl', 'MP Imported 90CL', '$/lb', 'raw', 'Imported boneless beef trimmings, 90% chemical lean')");
         _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('75cl_meatblock', 'MP 75CL Meat-Block', '$/cwt', 'derived', 'Derived 75CL blend from 90CL/50CL at configured ratio')");
         _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('trim_spread', 'MP Trim Spread', '$/cwt', 'derived', 'Domestic 90CL minus Imported 90CL, unit-normalized')");
+        _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('burger_benchmark', 'MP Burger Benchmark', '$/burger', 'derived', 'Standardized cost to build a hamburger from benchmark trimmings prices')");
       }
+    }
+
+    // Ensure burger_benchmark series exists (upgrade path for existing snapshots)
+    const hasBurger = queryOne("SELECT id FROM series WHERE id = 'burger_benchmark'");
+    if (!hasBurger) {
+      _db.run("INSERT INTO series (id, name, unit, source_type, description) VALUES ('burger_benchmark', 'MP Burger Benchmark', '$/burger', 'derived', 'Standardized cost to build a hamburger from benchmark trimmings prices')");
+    }
+
+    // Compute burger benchmark derived series on init
+    try {
+      const burgerEngine = require('./burger-engine');
+      const report = burgerEngine.getStartupReport();
+      console.log(`Burger Benchmark startup: ${report.summary}`);
+      const { datesComputed } = burgerEngine.computeAllBurgerDerived();
+      console.log(`Burger Benchmark: computed ${datesComputed} daily values`);
+    } catch (e) {
+      console.log('Burger engine init:', e.message);
     }
 
     try { save(); } catch (e) { console.log('Read-only filesystem, running in-memory only'); }

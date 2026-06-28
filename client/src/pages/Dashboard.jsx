@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 
 const SERIES_COLORS = {
   domestic_90cl: '#58a6ff',
@@ -33,7 +34,9 @@ function formatPrice(val, unit) {
 }
 
 export default function Dashboard({ apiHeaders }) {
+  const navigate = useNavigate();
   const [headlines, setHeadlines] = useState([]);
+  const [burgerLatest, setBurgerLatest] = useState(null);
   const [allData, setAllData] = useState({});
   const [activeSeries, setActiveSeries] = useState(['domestic_90cl', 'domestic_50cl']);
   const [dateRange, setDateRange] = useState('6M');
@@ -45,6 +48,11 @@ export default function Dashboard({ apiHeaders }) {
     fetch('/api/assessments/latest', { headers: apiHeaders })
       .then(r => r.json())
       .then(setHeadlines)
+      .catch(console.error);
+
+    fetch('/api/burger/latest', { headers: apiHeaders })
+      .then(r => r.json())
+      .then(setBurgerLatest)
       .catch(console.error);
 
     const seriesIds = Object.keys(SERIES_COLORS);
@@ -103,7 +111,7 @@ export default function Dashboard({ apiHeaders }) {
   return (
     <div>
       <div className="headline-strip">
-        {headlines.map(h => (
+        {headlines.filter(h => h.id !== 'burger_benchmark').map(h => (
           <div key={h.id} className="headline-card" onClick={() => {
             setActiveSeries([h.id]);
             setSelectedAssessment(h.latest);
@@ -119,6 +127,17 @@ export default function Dashboard({ apiHeaders }) {
             {h.latest && <div className="date">{h.latest.date}</div>}
           </div>
         ))}
+        {burgerLatest && !burgerLatest.error && (
+          <div className="headline-card burger-card" onClick={() => navigate('/burger')}>
+            <div className="series-name">BURGER BENCHMARK</div>
+            <div className="price">{formatPrice(burgerLatest.total_cost)}</div>
+            <div className={`change ${burgerLatest.change > 0 ? 'positive' : burgerLatest.change < 0 ? 'negative' : 'neutral'}`}>
+              {burgerLatest.change != null ? `${burgerLatest.change > 0 ? '+' : ''}${burgerLatest.change.toFixed(4)} (${burgerLatest.changePct > 0 ? '+' : ''}${burgerLatest.changePct?.toFixed(1)}%)` : '—'}
+            </div>
+            <div className="unit">$/burger · derived</div>
+            <div className="date">{burgerLatest.date}</div>
+          </div>
+        )}
       </div>
 
       {selectedAssessment && (

@@ -102,6 +102,15 @@ function computeDerivedSeries(date) {
     results.spread = spread;
   }
 
+  // Compute burger benchmark for this date
+  try {
+    const burgerEngine = require('./burger-engine');
+    const burgerResult = burgerEngine.computeBurgerDerived(date);
+    if (burgerResult) results.burger_benchmark = burgerResult.total_cost;
+  } catch (e) {
+    // burger-engine not critical to core derived series
+  }
+
   if (Object.keys(results).length > 0) db.save();
   return results;
 }

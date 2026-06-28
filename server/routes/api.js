@@ -4,6 +4,7 @@ const { parse } = require('csv-parse/sync');
 const { stringify } = require('csv-stringify/sync');
 const db = require('../db');
 const engine = require('../composite-engine');
+const burgerEngine = require('../burger-engine');
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
@@ -186,6 +187,83 @@ router.get('/stats', (req, res) => {
   const dateRange = db.queryOne('SELECT min(date) as mn, max(date) as mx FROM assessments');
   const dataSourceBreakdown = db.queryAll("SELECT data_source, count(*) as c FROM assessments GROUP BY data_source");
   res.json({ assessmentCount, tradeCount, contributorCount, dateRange, dataSourceBreakdown });
+});
+
+// --- Burger Benchmark Routes ---
+
+router.get('/burger/latest', (req, res) => {
+  const variant = {
+    patty_type: req.query.patty_type || 'hamburger',
+    patty_size: req.query.patty_size || 'quarter_pound',
+    blend_source: req.query.blend_source || 'domestic',
+    scope: req.query.scope || 'full_burger',
+  };
+
+  const latest = db.queryOne(
+    "SELECT date FROM assessments WHERE series_id IN ('domestic_90cl', 'domestic_50cl') ORDER BY date DESC LIMIT 1"
+  );
+  if (!latest) return res.json({ error: 'No data' });
+
+  const result = burgerEngine.computeBurgerBenchmark(latest.date, variant);
+  if (!result) return res.json({ error: 'Missing component data for latest date' });
+
+  const prev = db.queryOne(
+    "SELECT DISTINCT a1.date FROM assessments a1 JOIN assessments a2 ON a1.date = a2.date WHERE a1.series_id = 'domestic_90cl' AND a2.series_id = 'domestic_50cl' AND a1.date < ? ORDER BY a1.date DESC LIMIT 1",
+    [latest.date]
+  );
+
+  let change = null, changePct = null;
+  if (prev) {
+    const prevResult = burgerEngine.computeBurgerBenchmark(prev.date, variant);
+    if (prevResult) {
+      change = result.total_cost - prevResult.total_cost;
+      changePct = (change / prevResult.total_cost) * 100;
+    }
+  }
+
+  res.json({ ...result, change, changePct });
+});
+
+router.get('/burger/history', (req, res) => {
+  const variant = {
+    patty_type: req.query.patty_type || 'hamburger',
+    patty_size: req.query.patty_size || 'quarter_pound',
+    blend_source: req.query.blend_source || 'domestic',
+    scope: req.query.scope || 'full_burger',
+  };
+  res.json(burgerEngine.computeBurgerHistory(variant));
+});
+
+router.get('/burger/recipe', (req, res) => {
+  res.json(burgerEngine.recipe);
+});
+
+router.get('/burger/report', (req, res) => {
+  res.json(burgerEngine.getStartupReport());
+});
+
+router.get('/burger/export', (req, res) => {
+  const variant = {
+    patty_type: req.query.patty_type || 'hamburger',
+    patty_size: req.query.patty_size || 'quarter_pound',
+    blend_source: req.query.blend_source || 'domestic',
+    scope: req.query.scope || 'full_burger',
+  };
+
+  const { history } = burgerEngine.computeBurgerHistory(variant);
+  const rows = history.map(h => ({
+    date: h.date,
+    total_cost: h.total_cost.toFixed(4),
+    indexed: h.indexed ? h.indexed.toFixed(2) : '',
+    patty_cost: h.breakdown.patty.cost.toFixed(4),
+    non_meat_cost: h.breakdown.non_meat_total != null ? h.breakdown.non_meat_total.toFixed(4) : '',
+    variant: `${h.variant.patty_type}/${h.variant.patty_size}/${h.variant.blend_source}/${h.variant.scope}`,
+  }));
+
+  const csv = stringify(rows, { header: true });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=burger-benchmark-export.csv');
+  res.send(csv);
 });
 
 module.exports = router;

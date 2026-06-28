@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import ContributorView from './pages/ContributorView';
 import Methodology from './pages/Methodology';
 import AuditLog from './pages/AuditLog';
+import BurgerBenchmark from './pages/BurgerBenchmark';
 
 const ROLES = ['subscriber', 'contributor', 'admin'];
 const CONTRIBUTORS = [
@@ -31,6 +32,7 @@ export default function App() {
           <div className="header-logo">MP<span>/</span>TRIMMINGS</div>
           <nav className="header-nav">
             <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''} end>Dashboard</NavLink>
+            <NavLink to="/burger" className={({ isActive }) => isActive ? 'active' : ''}>Burger</NavLink>
             {(role === 'contributor' || role === 'admin') && (
               <NavLink to="/contribute" className={({ isActive }) => isActive ? 'active' : ''}>Contribute</NavLink>
             )}
@@ -55,6 +57,7 @@ export default function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<Dashboard apiHeaders={apiHeaders} />} />
+          <Route path="/burger" element={<BurgerBenchmark apiHeaders={apiHeaders} />} />
           <Route path="/contribute" element={<ContributorView apiHeaders={apiHeaders} role={role} contributorId={contributorId} />} />
           <Route path="/methodology" element={<Methodology />} />
           <Route path="/audit" element={<AuditLog apiHeaders={apiHeaders} />} />
