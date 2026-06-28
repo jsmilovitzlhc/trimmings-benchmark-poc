@@ -26,7 +26,10 @@ function save() {
 async function initialize() {
   if (_ready) return _ready;
   _ready = (async () => {
-    const SQL = await initSqlJs();
+    const sqlJsDir = path.dirname(require.resolve('sql.js/package.json'));
+    const SQL = await initSqlJs({
+      locateFile: (file) => path.join(sqlJsDir, 'dist', file)
+    });
     fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 
     if (fs.existsSync(DB_PATH)) {
